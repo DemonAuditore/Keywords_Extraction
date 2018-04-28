@@ -6,6 +6,7 @@ import pandas as pd
 import os
 import nltk
 import string
+import xlrd
 
 from pandas import Series, DataFrame
 from nltk.corpus import stopwords
@@ -25,7 +26,13 @@ col_name = '内容'
 def foo():
     file_i = []
     for file in file_list:
-        file_i.append(pd.read_excel(file))
+        book = xlrd.open_workbook(file)
+        # xlrd用于获取每个sheet的sheetname
+        for sheet in book.sheets():
+            df = pd.read_excel(file, sheet.name)
+            if df.empty:
+                continue
+            file_i.append(df)
     return file_i
 
 def find_key_words_from_text(content, rank):

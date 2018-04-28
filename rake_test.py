@@ -60,11 +60,16 @@ class Rake(object):
         self.stopwords = stopwords
         if self.stopwords is None:
             self.stopwords = nltk.corpus.stopwords.words(language)
+        # self.stopwords = stopwords
+        # if self.stopwords is None:
+        #     self.stopwords = nltk.corpus.stopwords.words(language)
+        # else:
+        #     self.stopwords = list(set(nltk.corpus.stopwords.words(language).extend(self.stopwords)))
 
         # If punctuations are not provided we ignore all punctuation symbols.
         self.punctuations = punctuations
         if self.punctuations is None:
-            self.punctuations = string.punctuation
+            self.punctuations = string.punctuation+'--'
 
         # All things which act as sentence breaks during keyword extraction.
         self.to_ignore = set(chain(self.stopwords, self.punctuations))
@@ -72,7 +77,7 @@ class Rake(object):
         # Stuff to be extracted from the provided text.
         self.frequency_dist = None
         self.tfidf_dict = None
-        self.frequency_dict = None
+        # self.frequency_dict = None
         self.tf_dict = None
         self.degree = None
         self.rank_list = None
