@@ -19,6 +19,8 @@ from sklearn import feature_extraction
 from sklearn.feature_extraction.text import TfidfTransformer
 from sklearn.feature_extraction.text import CountVectorizer
 
+from langid.langid import LanguageIdentifier, model
+
 import numpy as np
 
 import sys
@@ -43,6 +45,7 @@ class Rake(object):
             language="english",
             ranking_metric=Metric.WORD_FREQUENCY,
             col_name='内容',
+            rank = 1,
 
     ):
         """Constructor.
@@ -60,11 +63,6 @@ class Rake(object):
         self.stopwords = stopwords
         if self.stopwords is None:
             self.stopwords = nltk.corpus.stopwords.words(language)
-        # self.stopwords = stopwords
-        # if self.stopwords is None:
-        #     self.stopwords = nltk.corpus.stopwords.words(language)
-        # else:
-        #     self.stopwords = list(set(nltk.corpus.stopwords.words(language).extend(self.stopwords)))
 
         # If punctuations are not provided we ignore all punctuation symbols.
         self.punctuations = punctuations
@@ -86,6 +84,8 @@ class Rake(object):
         # Stuff for pandas
         self.col_name = col_name
 
+        self.rank = rank
+
     def extract_keywords_from_list(self, content):
         """Method to extract keywords from the text list.
         :param text: Text to extract keywords from, provided as a string.
@@ -93,16 +93,24 @@ class Rake(object):
         text_list = self.get_textlist_from_dataframe(content)
         phrase_list = []
         for text in text_list:
+            if not self.language_identification(text):
+                continue
             phrase_list_text = self.extract_keywords_from_text(text)
             phrase_list.append('`'.join(list(phrase_list_text)))
 
-        self._build_tfidf_dic(phrase_list)
+        if phrase_list:
+            self._build_tfidf_dic(phrase_list)
 
-        phrase_list = [val for sublist in phrase_list for val in sublist.split('`')]
+            phrase_list = [val for sublist in phrase_list for val in sublist.split('`')]
+            self._build_frequency_dist_list(phrase_list)
+            self._build_ranklist(phrase_list)
 
-        self._build_frequency_dist_list(phrase_list)
-        self._build_ranklist(phrase_list)
-
+    def language_identification(self, text):
+        identifier = LanguageIdentifier.from_modelstring(model, norm_probs=True)
+        result = identifier.classify(text)[0]
+        if result == 'en':
+            return True
+        return False
 
     def get_textlist_from_dataframe(self, content):
         con_list = []
@@ -142,7 +150,9 @@ class Rake(object):
         :return: List of tuples where each tuple is formed of an extracted
                  keyword string and its score. Ex: (5.68, 'Four Scoures')
         """
-        return self.rank_list
+        if not self.rank_list or len(self.rank_list) < self.rank:
+            return None
+        return self.rank_list[:self.rank]
 
     def get_word_frequency_distribution(self):
         """Method to fetch the word frequency distribution in the given text.
