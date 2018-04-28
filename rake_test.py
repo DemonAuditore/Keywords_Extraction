@@ -151,7 +151,7 @@ class Rake(object):
                  keyword string and its score. Ex: (5.68, 'Four Scoures')
         """
         if not self.rank_list or len(self.rank_list) < self.rank:
-            return None
+            return []
         return self.rank_list[:self.rank]
 
     def get_word_frequency_distribution(self):

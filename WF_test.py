@@ -37,7 +37,7 @@ def foo():
     return file_i
 
 def find_key_words_from_text(content, rank):
-    r = Rake(ranking_metric=Metric.WORD_FREQUENCY,rank = rank)
+    r = Rake(ranking_metric=Metric.TF_IDF,rank = rank)
     r.extract_keywords_from_list(content)
     return r.get_ranked_phrases_with_scores()
 
