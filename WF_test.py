@@ -37,7 +37,7 @@ def foo():
     return file_i
 
 def find_key_words_from_text(content, rank):
-    r = Rake(ranking_metric=Metric.TF_IDF,rank = rank)
+    r = Rake(ranking_metric=Metric.WORD_FREQUENCY,rank = rank)
     r.extract_keywords_from_list(content)
     return r.get_ranked_phrases_with_scores()
 
@@ -47,13 +47,13 @@ def entity_reco():
 if __name__ == "__main__":
     file_i = foo()
     for i,file in enumerate(file_i):
-        head_data = file.head(5)
+        head_data = file.head(10)
         content = DataFrame(head_data, columns=[col_name])
         key_words_list = find_key_words_from_text(content, 20)
         key_words_dict = {'热词': [key_word[1] for key_word in key_words_list],'TF-IDF':[key_word[0] for key_word in key_words_list]}
         data = DataFrame(key_words_dict)
-        s = 'test_{a}.csv'
-        data.to_csv(s.format(a=i), index=False, sep=',')
+        s = 'keywords_{a}.csv'
+        data.to_csv(s.format(a=file_name[i].split('.')[0]), index=False, sep=',')
 
 
 

@@ -24,6 +24,16 @@ from langid.langid import LanguageIdentifier, model
 import numpy as np
 
 import sys
+import re
+
+from nltk.tag.stanford import StanfordNERTagger
+from collections import Counter, defaultdict
+import os
+from itertools import chain, groupby, product
+
+
+JAVA_PATH = "C:/Program Files/Java/jdk1.8.0_92/bin/java.exe"
+os.environ['JAVAHOME'] = JAVA_PATH
 
 
 
@@ -67,15 +77,16 @@ class Rake(object):
         # If punctuations are not provided we ignore all punctuation symbols.
         self.punctuations = punctuations
         if self.punctuations is None:
-            self.punctuations = string.punctuation+'--'
+            self.punctuations = string.punctuation
 
         # All things which act as sentence breaks during keyword extraction.
-        self.to_ignore = set(chain(self.stopwords, self.punctuations))
+        self.to_ignore = set(chain(self.stopwords, self.punctuations,[',"']))
 
         # Stuff to be extracted from the provided text.
         self.frequency_dist = None
         self.tfidf_dict = None
         # self.frequency_dict = None
+        self.NE_dict = defaultdict(lambda : 'O')
         self.tf_dict = None
         self.degree = None
         self.rank_list = None
@@ -83,7 +94,6 @@ class Rake(object):
 
         # Stuff for pandas
         self.col_name = col_name
-
         self.rank = rank
 
     def extract_keywords_from_list(self, content):
@@ -100,7 +110,6 @@ class Rake(object):
 
         if phrase_list:
             self._build_tfidf_dic(phrase_list)
-
             phrase_list = [val for sublist in phrase_list for val in sublist.split('`')]
             self._build_frequency_dist_list(phrase_list)
             self._build_ranklist(phrase_list)
@@ -120,6 +129,8 @@ class Rake(object):
                 continue
 
             con_list.append(con)
+        # print(len(con_list))
+        # sys.exit(0)
         return con_list
 
     def extract_keywords_from_text(self, text):
@@ -145,7 +156,7 @@ class Rake(object):
         """
         return self.ranked_phrases
 
-    def get_ranked_phrases_with_scores(self):
+    def get_ranked_phrases_with_scores(self, NE_FLAG = False):
         """Method to fetch ranked keyword strings along with their scores.
         :return: List of tuples where each tuple is formed of an extracted
                  keyword string and its score. Ex: (5.68, 'Four Scoures')
@@ -165,6 +176,13 @@ class Rake(object):
         :return: Dictionary (defaultdict) of the format `word -> frequency`.
         """
         return self.tfidf_dict
+
+    def get_named_entities_list(self):
+        """Method to fetch the word frequency distribution in the given text.
+        :return: Dictionary (defaultdict) of the format `word -> frequency`.
+        """
+
+        return [self.NE_dict[ph[1]] for ph in self.rank_list]
 
     def _build_tfidf_dic(self, phrase_list):
         """Builds tfidf dictionary of the phrases in the given text list.
@@ -214,16 +232,23 @@ class Rake(object):
         self.rank_list = []
         # phrase_list = [val for sublist in phrase_list for val in sublist.split('`')]
         # phrase_set = set(phrase_list)
+        phrase_list = list(set(phrase_list))
         for phrase in phrase_list:
             rank = 0.0
             if self.metric == Metric.TF_IDF:
                 rank += 1.0 * self.tfidf_dict[phrase]
             if self.metric == Metric.WORD_FREQUENCY:
+                if self.NE_dict[phrase] == 'O':
+                    coe = 1.0
+                else:
+                    coe = 0.5
                 for word in phrase.split():
                     rank += 1.0 * self.frequency_dist[word]
+                rank = rank * coe
             self.rank_list.append((rank, phrase))
         self.rank_list.sort(reverse=True)
         self.ranked_phrases = [ph[1] for ph in self.rank_list]
+
 
     def _generate_phrases(self, sentences):
         """Method to generate contender phrases given the sentences of the text
@@ -234,9 +259,12 @@ class Rake(object):
                  of words forming a contender phrase.
         """
         phrase_list = set()
+        # phrase_list = []
         # Create contender phrases from sentences.
         for sentence in sentences:
-            word_list = [word.lower() for word in wordpunct_tokenize(sentence)]
+            word_list = [word for word in wordpunct_tokenize(sentence)]
+            # print(self._get_phrase_list_from_words(word_list))
+            # sys.exit(0)
             phrase_list.update(self._get_phrase_list_from_words(word_list))
         return phrase_list
 
@@ -254,5 +282,30 @@ class Rake(object):
         :return: List of contender phrases that are formed after dropping
                  stopwords and punctuations.
         """
-        groups = groupby(word_list, lambda x: x not in self.to_ignore)
-        return [' '.join(list(group[1])) for group in groups if group[0]]
+        tagger = StanfordNERTagger(
+            'E:\Learning Resources\TOOLS\stanford-ner-2015-12-09\classifiers\english.all.3class.distsim.crf.ser.gz',
+            'E:\Learning Resources\TOOLS\stanford-ner-2015-12-09\stanford-ner.jar',
+            encoding='utf-8')
+
+        phrase_list = []
+
+        classified_paragraphs_list = tagger.tag_sents([word_list])
+        groups = groupby(classified_paragraphs_list[0], lambda x: x[1])
+        for key, group in groups:
+            group_list = [g[0].lower() for g in group]
+            if key is 'O':
+                rs_groups = groupby(group_list, lambda x: x not in self.to_ignore and re.match(r'[a-zA-Z0-9]+',x) != None)
+                rs_group_list = [' '.join(list(rs_group[1])) for rs_group in rs_groups if rs_group[0]]
+
+                phrase_list.extend(rs_group_list)
+                # phrase_list.extend(group_list)
+            else:
+                phrase = ' '.join(group_list)
+                phrase_list.append(phrase)
+                self.NE_dict[phrase] = key
+
+        return phrase_list
+        # return phrase_list
+
+        # groups = groupby(word_list, lambda x: x not in self.to_ignore)
+        # return [' '.join(list(group[1])) for group in groups if group[0]]
