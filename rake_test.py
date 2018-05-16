@@ -109,9 +109,13 @@ class Rake(object):
             phrase_list.append('`'.join(list(phrase_list_text)))
 
         if phrase_list:
-            self._build_tfidf_dic(phrase_list)
+            if self.metric == Metric.TF_IDF or self.metric == Metric.TERM_FREQUENCY:
+                self._build_tfidf_dic(phrase_list)
+
             phrase_list = [val for sublist in phrase_list for val in sublist.split('`')]
-            self._build_frequency_dist_list(phrase_list)
+
+            if self.metric == Metric.WORD_FREQUENCY:
+                self._build_frequency_dist_list(phrase_list)
             self._build_ranklist(phrase_list)
 
     def language_identification(self, text):
@@ -129,8 +133,7 @@ class Rake(object):
                 continue
 
             con_list.append(con)
-        # print(len(con_list))
-        # sys.exit(0)
+
         return con_list
 
     def extract_keywords_from_text(self, text):
@@ -192,20 +195,17 @@ class Rake(object):
            :result: Dictionary
         """
         tfidf_dict = defaultdict(lambda : 0)
-        # tf_dict = defaultdict(lambda: 0)
+        tf_dict = defaultdict(lambda: 0)
 
-        vectorizer = CountVectorizer(token_pattern='(?u)\w+[\s\`]\w+')
-        transformer = TfidfTransformer()
+        # vectorizer = CountVectorizer(token_pattern='(?u)\w+[\s\`]\w+')
+        self_tokenizer = lambda doc: re.split('`',doc)
+        vectorizer = CountVectorizer(tokenizer=self_tokenizer)
+        transformer = TfidfTransformer(smooth_idf=True)
         tfidf = transformer.fit_transform(vectorizer.fit_transform(phrase_list))
 
         words = vectorizer.get_feature_names()
-        weight = tfidf.toarray()
-        # print(len(words))
-        # print(len(tfidf.toarray().sum(axis=0)))
+        weight = list(tfidf.toarray())
 
-        for i in range(len(weight)):
-            for j in range(len(words)):
-                tfidf_dict[words[j]] = weight[i][j]
         self.tfidf_dict = tfidf_dict
 
 
@@ -224,8 +224,11 @@ class Rake(object):
 
     def _build_ranklist(self, phrase_list):
         """Method to rank each contender phrase using the formula
+        For TF_IDF:
+              phrase_score = tf-idf value of the phrase.
+        For WORD_FREQUENCY:
               phrase_score = sum of scores of words in the phrase.
-              word_score = d(w)/f(w) where d is degree and f is frequency.
+              word_score = word frequency.
         :param phrase_list: List of List of strings where each sublist is a
                             collection of words which form a contender phrase.
         """
@@ -237,14 +240,11 @@ class Rake(object):
             rank = 0.0
             if self.metric == Metric.TF_IDF:
                 rank += 1.0 * self.tfidf_dict[phrase]
+            if self.metric == Metric.TERM_FREQUENCY:
+                rank += 1.0 * self.tf_dict[phrase]
             if self.metric == Metric.WORD_FREQUENCY:
-                if self.NE_dict[phrase] == 'O':
-                    coe = 1.0
-                else:
-                    coe = 0.5
                 for word in phrase.split():
                     rank += 1.0 * self.frequency_dist[word]
-                rank = rank * coe
             self.rank_list.append((rank, phrase))
         self.rank_list.sort(reverse=True)
         self.ranked_phrases = [ph[1] for ph in self.rank_list]
@@ -258,14 +258,14 @@ class Rake(object):
         :return: Set of string tuples where each tuple is a collection
                  of words forming a contender phrase.
         """
-        phrase_list = set()
-        # phrase_list = []
+        # phrase_list = set()
+        phrase_list = []
         # Create contender phrases from sentences.
         for sentence in sentences:
             word_list = [word for word in wordpunct_tokenize(sentence)]
             # print(self._get_phrase_list_from_words(word_list))
             # sys.exit(0)
-            phrase_list.update(self._get_phrase_list_from_words(word_list))
+            phrase_list.extend(self._get_phrase_list_from_words(word_list))
         return phrase_list
 
     def _get_phrase_list_from_words(self, word_list):
@@ -283,7 +283,7 @@ class Rake(object):
                  stopwords and punctuations.
         """
         tagger = StanfordNERTagger(
-            'E:\Learning Resources\TOOLS\stanford-ner-2015-12-09\classifiers\english.all.3class.distsim.crf.ser.gz',
+            'E:\Learning Resources\TOOLS\stanford-ner-2015-12-09\classifiers\english.muc.7class.distsim.crf.ser.gz',
             'E:\Learning Resources\TOOLS\stanford-ner-2015-12-09\stanford-ner.jar',
             encoding='utf-8')
 
@@ -294,11 +294,11 @@ class Rake(object):
         for key, group in groups:
             group_list = [g[0].lower() for g in group]
             if key is 'O':
-                rs_groups = groupby(group_list, lambda x: x not in self.to_ignore and re.match(r'[a-zA-Z0-9]+',x) != None)
-                rs_group_list = [' '.join(list(rs_group[1])) for rs_group in rs_groups if rs_group[0]]
-
-                phrase_list.extend(rs_group_list)
-                # phrase_list.extend(group_list)
+                # rs_groups = groupby(group_list, lambda x: x not in self.to_ignore and re.match(r'[a-zA-Z0-9]+',x) != None)
+                # rs_group_list = [' '.join(list(rs_group[1])) for rs_group in rs_groups if rs_group[0]]
+                #
+                # phrase_list.extend(rs_group_list)
+                phrase_list.extend(group_list)
             else:
                 phrase = ' '.join(group_list)
                 phrase_list.append(phrase)

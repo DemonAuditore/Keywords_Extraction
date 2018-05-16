@@ -27,17 +27,18 @@ col_name = '内容'
 def foo():
     file_i = []
     for file in file_list:
-        book = xlrd.open_workbook(file)
-        # xlrd用于获取每个sheet的sheetname
-        for sheet in book.sheets():
-            df = pd.read_excel(file, sheet.name)
-            if df.empty:
-                continue
-            file_i.append(df)
+        df = pd.read_excel(file)
+        # book = xlrd.open_workbook(file)
+        # # xlrd用于获取每个sheet的sheetname
+        # for sheet in book.sheets():
+        #     df = pd.read_excel(file, sheet.name)
+        #     if df.empty:
+        #         continue
+        file_i.append(df)
     return file_i
 
 def find_key_words_from_text(content, rank):
-    r = Rake(ranking_metric=Metric.WORD_FREQUENCY,rank = rank)
+    r = Rake(ranking_metric=Metric.TF_IDF,rank = rank)
     r.extract_keywords_from_list(content)
     return r.get_ranked_phrases_with_scores()
 
@@ -50,7 +51,7 @@ if __name__ == "__main__":
         head_data = file.head(10)
         content = DataFrame(head_data, columns=[col_name])
         key_words_list = find_key_words_from_text(content, 20)
-        key_words_dict = {'热词': [key_word[1] for key_word in key_words_list],'TF-IDF':[key_word[0] for key_word in key_words_list]}
+        key_words_dict = {'热词': [key_word[1] for key_word in key_words_list],'WORD-FREQUENCY':[key_word[0] for key_word in key_words_list]}
         data = DataFrame(key_words_dict)
         s = 'keywords_{a}.csv'
         data.to_csv(s.format(a=file_name[i].split('.')[0]), index=False, sep=',')
